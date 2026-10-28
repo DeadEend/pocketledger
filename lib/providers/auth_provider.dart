@@ -59,6 +59,7 @@ class AuthProvider extends ChangeNotifier {
           uid: created.uid,
           name: name,
           email: created.email ?? email.trim(),
+          withSampleData: false,
         );
       } on AppException {
         // The account exists. The profile is created on first load instead.

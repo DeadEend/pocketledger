@@ -55,7 +55,7 @@ class ExpenseService {
     required String uid,
     required String name,
     required String email,
-    bool withSampleData = true,
+    bool withSampleData = false,
   }) async {
     final batch = _db.batch();
     final profile = AppUser(
