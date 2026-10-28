@@ -1,4 +1,4 @@
-
+﻿
 name: pocketledger
 description: A simple expense tracker for college students.
 publish_to: 'none'
@@ -31,5 +31,5 @@ flutter_launcher_icons:
   android: true
   ios: false
   image_path: "assets/icon/pocketledger_icon_1024.png"
-  adaptive_icon_background: "#F8F5EF"
+  adaptive_icon_background: "#1F6F5C"
   adaptive_icon_foreground: "assets/icon/pocketledger_icon_foreground_1024.png"
