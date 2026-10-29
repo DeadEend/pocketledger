@@ -1,3 +1,4 @@
+
 import 'dart:async';
 
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -11,7 +12,7 @@ import '../utils/sample_data.dart';
 
 /// All Firestore access for the signed-in user's profile and expenses.
 ///
-/// Write methods return true once the server confirmed the change, and false
+/// Write methods return true once the server confirms the change, and false
 /// if the device looks offline: Firestore keeps the change locally and syncs
 /// it when the connection returns.
 class ExpenseService {
@@ -27,6 +28,26 @@ class ExpenseService {
 
   CollectionReference<Map<String, dynamic>> _expenses(String uid) =>
       _userDoc(uid).collection('expenses');
+
+  /// Checks that the signed-in user's profile can be read from the server.
+  ///
+  /// This is a preflight check only; the connection can still fail later.
+  Future<void> verifyServerConnection(String uid) async {
+    try {
+      await _userDoc(uid)
+          .get(const GetOptions(source: Source.server))
+          .timeout(_writeTimeout);
+    } on FirebaseException catch (error) {
+      throw AppException(firestoreErrorMessage(error));
+    } on TimeoutException {
+      throw const AppException(
+        'The server is taking too long to respond. '
+            'Check your connection and try again.',
+      );
+    } catch (_) {
+      throw const AppException(genericErrorMessage);
+    }
+  }
 
   /// Emits null only when the server confirms the profile does not exist.
   Stream<AppUser?> profileStream(String uid) {
@@ -44,12 +65,12 @@ class ExpenseService {
   Stream<List<Expense>> expensesStream(String uid) {
     return _expenses(uid).snapshots().map(
           (snapshot) => snapshot.docs
-              .map((doc) => Expense.fromMap(doc.id, doc.data()))
-              .toList(),
-        );
+          .map((doc) => Expense.fromMap(doc.id, doc.data()))
+          .toList(),
+    );
   }
 
-  /// Creates the profile and, optionally, the sample expenses in one batch.
+  /// Creates the profile and, optionally, sample expenses in one batch.
   Future<void> createProfile({
     required String uid,
     required String name,
@@ -85,7 +106,8 @@ class ExpenseService {
     final displayName = user.displayName?.trim() ?? '';
     final email = user.email ?? '';
     final fallbackName =
-        email.contains('@') ? email.split('@').first : 'Student';
+    email.contains('@') ? email.split('@').first : 'Student';
+
     return createProfile(
       uid: user.uid,
       name: displayName.isEmpty ? fallbackName : displayName,
@@ -109,10 +131,45 @@ class ExpenseService {
 
   Future<bool> deleteExpenses(String uid, List<String> expenseIds) {
     final batch = _db.batch();
+
     for (final id in expenseIds) {
       batch.delete(_expenses(uid).doc(id));
     }
+
     return _commit(batch.commit());
+  }
+
+  /// Deletes all expense documents and then the user's profile.
+  ///
+  /// Authentication account deletion is handled separately.
+  /// Call only after explicit confirmation.
+  Future<void> deleteAccountData(String uid) async {
+    try {
+      final expensesRef = _expenses(uid);
+
+      while (true) {
+        // Use server data rather than relying only on the local cache.
+        final snapshot = await expensesRef.limit(450).get(
+          const GetOptions(source: Source.server),
+        );
+
+        if (snapshot.docs.isEmpty) break;
+
+        final batch = _db.batch();
+
+        for (final document in snapshot.docs) {
+          batch.delete(document.reference);
+        }
+
+        await batch.commit();
+      }
+
+      await _userDoc(uid).delete();
+    } on FirebaseException catch (error) {
+      throw AppException(firestoreErrorMessage(error));
+    } catch (_) {
+      throw const AppException(genericErrorMessage);
+    }
   }
 
   Future<bool> updateProfile(String uid, Map<String, Object> fields) {

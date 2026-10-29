@@ -1,3 +1,4 @@
+
 import 'package:firebase_core/firebase_core.dart';
 
 /// An error whose message is safe to show to the user as it is.
@@ -10,7 +11,13 @@ class AppException implements Exception {
   String toString() => message;
 }
 
-const String genericErrorMessage = 'Something went wrong. Please try again.';
+const String genericErrorMessage =
+    'Something went wrong. Please try again.';
+
+const String accountDeletionPartialFailureMessage =
+    'Your account deletion could not be completed fully. '
+    'Some data may already have been deleted. Check your account status '
+    'before trying again.';
 
 String authErrorMessage(String code) {
   switch (code) {
@@ -31,6 +38,9 @@ String authErrorMessage(String code) {
       return 'Choose a stronger password with at least 6 characters.';
     case 'network-request-failed':
       return 'No internet connection. Check your network and try again.';
+    case 'requires-recent-login':
+      return 'For your security, please verify your password again '
+          'before deleting your account.';
     case 'too-many-requests':
       return 'Too many attempts. Please wait a moment and try again.';
     case 'operation-not-allowed':
@@ -43,7 +53,8 @@ String authErrorMessage(String code) {
 String firestoreErrorMessage(FirebaseException error) {
   switch (error.code) {
     case 'permission-denied':
-      return 'Access denied. Make sure the Firestore rules are published and you are logged in.';
+      return 'Access denied. Make sure the Firestore rules are published '
+          'and you are logged in.';
     case 'unavailable':
     case 'deadline-exceeded':
       return 'Cannot reach the server. Check your internet connection.';

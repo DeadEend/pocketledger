@@ -1,3 +1,4 @@
+
 import 'package:firebase_auth/firebase_auth.dart';
 
 import '../utils/app_exception.dart';
@@ -11,7 +12,10 @@ class AuthService {
 
   Stream<User?> authStateChanges() => _auth.authStateChanges();
 
-  Future<void> signIn({required String email, required String password}) async {
+  Future<void> signIn({
+    required String email,
+    required String password,
+  }) async {
     try {
       await _auth.signInWithEmailAndPassword(
         email: email.trim(),
@@ -31,6 +35,7 @@ class AuthService {
     required String password,
   }) async {
     User? user;
+
     try {
       final credential = await _auth.createUserWithEmailAndPassword(
         email: email.trim(),
@@ -52,6 +57,7 @@ class AuthService {
     } catch (_) {
       // Not critical: the name is also stored in the Firestore profile.
     }
+
     return user;
   }
 
@@ -60,6 +66,68 @@ class AuthService {
       await _auth.sendPasswordResetEmail(email: email.trim());
     } on FirebaseAuthException catch (error) {
       throw AppException(authErrorMessage(error.code));
+    } catch (_) {
+      throw const AppException(genericErrorMessage);
+    }
+  }
+
+  /// Reauthenticates the current user with their email and password.
+  ///
+  /// Firebase may require recent authentication before account deletion.
+  Future<void> reauthenticate({
+    required String password,
+  }) async {
+    final user = _auth.currentUser;
+
+    if (user == null) {
+      throw const AppException('Please log in again.');
+    }
+
+    final email = user.email;
+
+    if (email == null || email.isEmpty) {
+      throw const AppException(
+        'This account cannot be verified with an email and password.',
+      );
+    }
+
+    try {
+      final credential = EmailAuthProvider.credential(
+        email: email,
+        password: password,
+      );
+
+      await user.reauthenticateWithCredential(credential);
+    } on FirebaseAuthException catch (error) {
+      throw AppException(authErrorMessage(error.code));
+    } catch (_) {
+      throw const AppException(genericErrorMessage);
+    }
+  }
+
+  /// Deletes the currently signed-in Firebase Authentication account.
+  ///
+  /// Firestore data must be handled separately.
+  Future<void> deleteAccount() async {
+    try {
+      final user = _auth.currentUser;
+
+      if (user == null) {
+        throw const AppException('Please log in again.');
+      }
+
+      await user.delete();
+    } on FirebaseAuthException catch (error) {
+      if (error.code == 'requires-recent-login') {
+        throw const AppException(
+          'For your security, please verify your password again '
+              'before deleting your account.',
+        );
+      }
+
+      throw AppException(authErrorMessage(error.code));
+    } on AppException {
+      rethrow;
     } catch (_) {
       throw const AppException(genericErrorMessage);
     }
