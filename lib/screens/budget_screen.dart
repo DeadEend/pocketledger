@@ -1,3 +1,4 @@
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -23,16 +24,25 @@ class BudgetScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final data = context.watch<DataProvider>();
     final error = data.error;
-    if (error != null) return ErrorView(message: error, onRetry: data.reload);
+
+    if (error != null) {
+      return ErrorView(message: error, onRetry: data.reload);
+    }
+
     if (data.isLoading) return const LoadingView();
 
     final textTheme = Theme.of(context).textTheme;
     final now = DateTime.now();
     final spent = sumAmounts(expensesInMonth(data.expenses, now));
-    final status = BudgetStatus.from(spent: spent, budget: data.monthlyBudget);
+    final status = BudgetStatus.from(
+      spent: spent,
+      budget: data.monthlyBudget,
+    );
     final isSet = status.state != BudgetState.notSet;
 
-    final daysLeft = DateTime(now.year, now.month + 1, 0).day - now.day + 1;
+    final daysLeft =
+        DateTime(now.year, now.month + 1, 0).day - now.day + 1;
+
     final perDay = isSet && status.remaining > 0
         ? (status.remaining / daysLeft).floorToDouble()
         : 0.0;
@@ -46,11 +56,16 @@ class BudgetScreen extends StatelessWidget {
             children: [
               Text(formatMonth(now), style: textTheme.titleMedium),
               const SizedBox(height: AppSpacing.md),
-              _StatRow(label: 'Spent so far', value: formatCurrency(spent)),
+              _StatRow(
+                label: 'Spent so far',
+                value: formatCurrency(spent),
+              ),
               const SizedBox(height: AppSpacing.sm),
               _StatRow(
                 label: 'Monthly budget',
-                value: isSet ? formatCurrency(status.budget) : 'Not set',
+                value: isSet
+                    ? formatCurrency(status.budget)
+                    : 'Not set',
               ),
               if (isSet) ...[
                 const SizedBox(height: AppSpacing.md),
@@ -59,7 +74,7 @@ class BudgetScreen extends StatelessWidget {
                   const SizedBox(height: AppSpacing.md),
                   Text(
                     'About ${formatCurrency(perDay)} a day for the remaining '
-                    '$daysLeft ${daysLeft == 1 ? 'day' : 'days'} of the month.',
+                        '$daysLeft ${daysLeft == 1 ? 'day' : 'days'} of the month.',
                     style: textTheme.bodySmall,
                   ),
                 ],
@@ -76,7 +91,10 @@ class BudgetScreen extends StatelessWidget {
 }
 
 class _StatRow extends StatelessWidget {
-  const _StatRow({required this.label, required this.value});
+  const _StatRow({
+    required this.label,
+    required this.value,
+  });
 
   final String label;
   final String value;
@@ -84,6 +102,7 @@ class _StatRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
@@ -105,18 +124,33 @@ class _BudgetForm extends StatefulWidget {
 
 class _BudgetFormState extends State<_BudgetForm> {
   final _formKey = GlobalKey<FormState>();
+
   late final TextEditingController _controller;
+
   bool _busy = false;
   String? _error;
 
   @override
   void initState() {
     super.initState();
+
     _controller = TextEditingController(
       text: widget.initialBudget > 0
           ? formatAmountInput(widget.initialBudget)
           : '',
     );
+  }
+
+  // Synchronize the budget field when the saved budget changes elsewhere.
+  @override
+  void didUpdateWidget(covariant _BudgetForm oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.initialBudget != widget.initialBudget) {
+      _controller.text = widget.initialBudget > 0
+          ? formatAmountInput(widget.initialBudget)
+          : '';
+    }
   }
 
   @override
@@ -127,12 +161,16 @@ class _BudgetFormState extends State<_BudgetForm> {
 
   Future<void> _save() async {
     final form = _formKey.currentState;
+
     if (form == null || !form.validate()) return;
+
     final parsed = parseAmount(_controller.text);
     if (parsed == null) return;
 
     FocusScope.of(context).unfocus();
+
     final data = context.read<DataProvider>();
+
     setState(() {
       _busy = true;
       _error = null;
@@ -140,8 +178,11 @@ class _BudgetFormState extends State<_BudgetForm> {
 
     String? error;
     bool synced = true;
+
     try {
-      synced = await data.updateProfile(monthlyBudget: roundMoney(parsed));
+      synced = await data.updateProfile(
+        monthlyBudget: roundMoney(parsed),
+      );
     } on AppException catch (e) {
       error = e.message;
     } catch (_) {
@@ -149,30 +190,40 @@ class _BudgetFormState extends State<_BudgetForm> {
     }
 
     if (!mounted) return;
+
     setState(() {
       _busy = false;
       _error = error;
     });
+
     if (error == null) {
-      showAppSnackBar(context, synced ? 'Budget updated' : queuedMessage);
+      showAppSnackBar(
+        context,
+        synced ? 'Budget updated' : queuedMessage,
+      );
     }
   }
 
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+
     return AppCard(
       child: Form(
         key: _formKey,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Set monthly budget', style: textTheme.titleMedium),
+            Text(
+              'Set monthly budget',
+              style: textTheme.titleMedium,
+            ),
             const SizedBox(height: AppSpacing.md),
             TextFormField(
               controller: _controller,
-              keyboardType:
-                  const TextInputType.numberWithOptions(decimal: true),
+              keyboardType: const TextInputType.numberWithOptions(
+                decimal: true,
+              ),
               textInputAction: TextInputAction.done,
               onFieldSubmitted: (_) => _save(),
               validator: validateBudget,

@@ -37,7 +37,11 @@ class ProfileScreen extends StatelessWidget {
       await auth.signOut();
     } on AppException catch (error) {
       if (context.mounted) {
-        showAppSnackBar(context, error.message, isError: true);
+        showAppSnackBar(
+          context,
+          error.message,
+          isError: true,
+        );
       }
     } catch (_) {
       if (context.mounted) {
@@ -107,6 +111,7 @@ class ProfileScreen extends StatelessWidget {
     }
 
     final profile = data.profile;
+
     if (data.isLoading || profile == null) {
       return const LoadingView();
     }
@@ -123,7 +128,9 @@ class ProfileScreen extends StatelessWidget {
         const SizedBox(height: AppSpacing.md),
         OutlinedButton.icon(
           onPressed: () => _logOut(context),
-          style: outlinedButtonStyle(color: AppColors.danger).copyWith(
+          style: outlinedButtonStyle(
+            color: AppColors.danger,
+          ).copyWith(
             minimumSize: const WidgetStatePropertyAll(
               Size.fromHeight(52),
             ),
@@ -134,7 +141,9 @@ class ProfileScreen extends StatelessWidget {
         const SizedBox(height: AppSpacing.md),
         OutlinedButton.icon(
           onPressed: () => _deleteAccount(context),
-          style: outlinedButtonStyle(color: AppColors.danger).copyWith(
+          style: outlinedButtonStyle(
+            color: AppColors.danger,
+          ).copyWith(
             minimumSize: const WidgetStatePropertyAll(
               Size.fromHeight(52),
             ),
@@ -157,7 +166,9 @@ class _ProfileHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
     final name = profile.name;
-    final initial = name.isEmpty ? '?' : name.substring(0, 1).toUpperCase();
+    final initial = name.isEmpty
+        ? '?'
+        : name.substring(0, 1).toUpperCase();
 
     return Row(
       children: [
@@ -203,7 +214,10 @@ class _ProfileHeader extends StatelessWidget {
 }
 
 class _ProfileForm extends StatefulWidget {
-  const _ProfileForm({super.key, required this.profile});
+  const _ProfileForm({
+    super.key,
+    required this.profile,
+  });
 
   final AppUser profile;
 
@@ -213,6 +227,7 @@ class _ProfileForm extends StatefulWidget {
 
 class _ProfileFormState extends State<_ProfileForm> {
   final _formKey = GlobalKey<FormState>();
+
   late final TextEditingController _nameController;
   late final TextEditingController _budgetController;
 
@@ -224,12 +239,33 @@ class _ProfileFormState extends State<_ProfileForm> {
     super.initState();
 
     final profile = widget.profile;
-    _nameController = TextEditingController(text: profile.name);
+
+    _nameController = TextEditingController(
+      text: profile.name,
+    );
+
     _budgetController = TextEditingController(
       text: profile.monthlyBudget > 0
           ? formatAmountInput(profile.monthlyBudget)
           : '',
     );
+  }
+
+  // Synchronize the fields when profile data changes elsewhere.
+  @override
+  void didUpdateWidget(covariant _ProfileForm oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.profile.monthlyBudget !=
+        widget.profile.monthlyBudget) {
+      _budgetController.text = widget.profile.monthlyBudget > 0
+          ? formatAmountInput(widget.profile.monthlyBudget)
+          : '';
+    }
+
+    if (oldWidget.profile.name != widget.profile.name) {
+      _nameController.text = widget.profile.name;
+    }
   }
 
   @override
@@ -241,6 +277,7 @@ class _ProfileFormState extends State<_ProfileForm> {
 
   Future<void> _save() async {
     final form = _formKey.currentState;
+
     if (form == null || !form.validate()) return;
 
     final budget = parseAmount(_budgetController.text);
@@ -294,7 +331,10 @@ class _ProfileFormState extends State<_ProfileForm> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Text('Your details', style: textTheme.titleMedium),
+            Text(
+              'Your details',
+              style: textTheme.titleMedium,
+            ),
             const SizedBox(height: AppSpacing.md),
             TextFormField(
               controller: _nameController,
