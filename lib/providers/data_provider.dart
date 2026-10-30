@@ -1,3 +1,4 @@
+
 import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
@@ -26,7 +27,11 @@ class DataProvider extends ChangeNotifier {
   bool _expensesLoaded = false;
   bool _timedOut = false;
   bool _creatingProfile = false;
+  bool _suppressMissingProfileCreation = false;
   bool _disposed = false;
+
+  Future<void>? _profileCreation;
+
   String? _error;
 
   List<Expense> get expenses => _expenses;
@@ -51,7 +56,8 @@ class DataProvider extends ChangeNotifier {
     return null;
   }
 
-  bool get isLoading => error == null && !(_profileLoaded && _expensesLoaded);
+  bool get isLoading =>
+      error == null && !(_profileLoaded && _expensesLoaded);
 
   /// Called by the provider tree whenever the auth state changes.
   /// It must not notify listeners, because it runs while widgets are building.
@@ -60,27 +66,49 @@ class DataProvider extends ChangeNotifier {
     _start(user);
   }
 
+  /// Prevents automatic profile recreation during account deletion.
+  ///
+  /// If profile creation has already started, wait for it to finish before
+  /// the deletion process removes the Firestore documents.
+  Future<void> prepareForAccountDeletion() async {
+    _suppressMissingProfileCreation = true;
+    await _profileCreation;
+  }
+
   void reload() {
     _start(_user);
     _notify();
   }
 
   void _start(User? user) {
+    final previousUid = _user?.uid;
+
     _stop();
     _user = user;
+
+    // Reset the protection only when the signed-in user changes.
+    if (previousUid != user?.uid) {
+      _suppressMissingProfileCreation = false;
+    }
+
     _profile = null;
     _expenses = const [];
     _profileLoaded = false;
     _expensesLoaded = false;
     _timedOut = false;
     _error = null;
+
     if (user == null) return;
 
     _profileSub = _service.profileStream(user.uid).listen(
-      (profile) {
+          (profile) {
         _profile = profile;
         _profileLoaded = profile != null;
-        if (profile == null) _createMissingProfile(user);
+
+        if (profile == null && !_suppressMissingProfileCreation) {
+          _createMissingProfile(user);
+        }
+
         _notify();
       },
       onError: (Object error) {
@@ -90,7 +118,7 @@ class DataProvider extends ChangeNotifier {
     );
 
     _expensesSub = _service.expensesStream(user.uid).listen(
-      (expenses) {
+          (expenses) {
         _expenses = expenses;
         _expensesLoaded = true;
         _notify();
@@ -113,19 +141,27 @@ class DataProvider extends ChangeNotifier {
     _profileSub?.cancel();
     _expensesSub?.cancel();
     _slowTimer?.cancel();
+
     _profileSub = null;
     _expensesSub = null;
     _slowTimer = null;
   }
 
   String _describe(Object error) {
-    if (error is FirebaseException) return firestoreErrorMessage(error);
+    if (error is FirebaseException) {
+      return firestoreErrorMessage(error);
+    }
     return 'Could not load your data. Please try again.';
   }
 
-  Future<void> _createMissingProfile(User user) async {
-    if (_creatingProfile) return;
+  void _createMissingProfile(User user) {
+    if (_creatingProfile || _suppressMissingProfileCreation) return;
+
     _creatingProfile = true;
+    _profileCreation = _performMissingProfileCreation(user);
+  }
+
+  Future<void> _performMissingProfileCreation(User user) async {
     try {
       await _service.ensureProfile(user);
     } on AppException catch (error) {
@@ -133,12 +169,15 @@ class DataProvider extends ChangeNotifier {
       _notify();
     } finally {
       _creatingProfile = false;
+      _profileCreation = null;
     }
   }
 
   String get _uid {
     final user = _user;
-    if (user == null) throw const AppException('Please log in again.');
+    if (user == null) {
+      throw const AppException('Please log in again.');
+    }
     return user.uid;
   }
 
@@ -156,13 +195,21 @@ class DataProvider extends ChangeNotifier {
         .where((expense) => expense.isSample)
         .map((expense) => expense.id)
         .toList();
+
     return _service.deleteExpenses(_uid, ids);
   }
 
-  Future<bool> updateProfile({String? name, double? monthlyBudget}) {
+  Future<bool> updateProfile({
+    String? name,
+    double? monthlyBudget,
+  }) {
     final fields = <String, Object>{};
+
     if (name != null) fields['name'] = name;
-    if (monthlyBudget != null) fields['monthlyBudget'] = monthlyBudget;
+    if (monthlyBudget != null) {
+      fields['monthlyBudget'] = monthlyBudget;
+    }
+
     return _service.updateProfile(_uid, fields);
   }
 

@@ -52,22 +52,39 @@ class ProfileScreen extends StatelessWidget {
 
   Future<void> _deleteAccount(BuildContext context) async {
     final auth = context.read<AuthProvider>();
+    final data = context.read<DataProvider>();
 
     final password = await showDeleteAccountDialog(context);
     if (password == null || !context.mounted) return;
 
     try {
+      // Step 1: Verify the user's password.
       await auth.reauthenticate(password: password);
+
+      if (!context.mounted) return;
+
+      // Step 2: Prevent the Firestore listener from recreating
+      // the profile while account deletion is taking place.
+      await data.prepareForAccountDeletion();
+
+      if (!context.mounted) return;
+
+      // Step 3: Delete Firestore data and the Authentication account.
+      await auth.deleteAccount();
 
       if (!context.mounted) return;
 
       showAppSnackBar(
         context,
-        'Password verified. Account deletion is not enabled yet.',
+        'Your PocketLedger account has been deleted.',
       );
     } on AppException catch (error) {
       if (context.mounted) {
-        showAppSnackBar(context, error.message, isError: true);
+        showAppSnackBar(
+          context,
+          error.message,
+          isError: true,
+        );
       }
     } catch (_) {
       if (context.mounted) {
